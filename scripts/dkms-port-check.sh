@@ -141,7 +141,8 @@ module_kernel=${module_vermagic%% *}
 
 userspace_output=$("$userspace" --version 2>&1 || "$userspace" version 2>&1) ||
     die "userspace version command failed: $userspace"
-userspace_version=$(printf '%s\n' "$userspace_output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+userspace_version=$(printf '%s\n' "$userspace_output" |
+    awk 'match($0, /[0-9]+\.[0-9]+\.[0-9]+/) { print substr($0, RSTART, RLENGTH); exit }')
 [ -n "$userspace_version" ] || die "userspace version not found: $userspace"
 userspace_version=${userspace_version#v}
 
