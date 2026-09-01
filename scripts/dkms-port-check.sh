@@ -158,9 +158,12 @@ case "$module_name" in
 esac
 initramfs_listing=$(lsinitramfs -l "$initramfs" 2>/dev/null) ||
     die "cannot inspect initramfs: $initramfs"
-printf '%s\n' "$initramfs_listing" |
-    grep -Eq "(^|/)${module_name}\.ko(\.(xz|zst|gz|lz4|lzma))?$" ||
+if ! awk -v module_name="$module_name" '
+        $0 ~ "(^|/)" module_name "\\.ko(\\.(xz|zst|gz|lz4|lzma))?$" { found = 1 }
+        END { exit(found ? 0 : 1) }
+    ' <<<"$initramfs_listing"; then
     die "module absent from initramfs: $module_name"
+fi
 
 printf 'PASS: source=%s module=%s userspace=%s kernel=%s initramfs=%s\n' \
     "$source_version" "$module_version" "$userspace_version" "$kernel_release" "$module_name"
