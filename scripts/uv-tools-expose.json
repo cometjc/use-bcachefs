@@ -1,0 +1,7 @@
+{
+  "command": "use-bcachefs",
+  "entry": "scripts/uv_tools_entry.py",
+  "subcommands": {
+    "dkms-port-check": "scripts/dkms-port-check.sh"
+  }
+}

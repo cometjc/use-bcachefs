@@ -1,9 +1,28 @@
 ---
 name: use-bcachefs
-description: Reference for bcachefs-specific system configuration pitfalls — plocate/updatedb/locate setup, PRUNEFS, PRUNE_BIND_MOUNTS, subvolume mount behaviour, and swapfile limitation (use zram instead).
+description: Reference for bcachefs-specific system configuration pitfalls — plocate/updatedb/locate setup, DKMS port checks, PRUNEFS, PRUNE_BIND_MOUNTS, subvolume mount behaviour, and swapfile limitation (use zram instead).
 ---
 
 # bcachefs 系統整合注意事項
+
+## 指令總覽
+
+```bash
+use-bcachefs dkms-port-check --help
+```
+
+唯讀核對新版 kernel 之 source、module、userspace、vermagic 與 initramfs；
+不編譯、不安裝、不改磁碟或 GRUB。詳見 `references/dkms-porting.md`。
+
+## 安裝 skill command
+
+於 primary worktree 執行：
+
+```bash
+writing-skill-scripts install scripts/uv-tools-expose.json
+use-bcachefs --help
+use-bcachefs dkms-port-check --help
+```
 
 ## plocate / updatedb / locate 在 bcachefs 上的正確設定
 

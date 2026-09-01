@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "use-bcachefs"
+version = "0.1.0"
+description = "bcachefs system integration references and checks"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+use-bcachefs = "scripts.uv_tools_entry:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+  "scripts/uv_tools_entry.py",
+  "scripts/dkms-port-check.sh",
+]
+
+[tool.uv]
+package = true
