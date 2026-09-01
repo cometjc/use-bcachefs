@@ -22,7 +22,11 @@ printf 'usr/lib/modules/7.0.0-30-generic/updates/bcachefs.ko\n'
 EOF
 cat >"$tmpdir/userspace" <<'EOF'
 #!/usr/bin/env bash
-printf 'bcachefs-tools 1.39.4\n'
+if [ "${1:-}" = "version" ]; then
+    printf 'bcachefs version: v1.39.4\n'
+    exit 0
+fi
+exit 2
 EOF
 chmod +x "$tmpdir/bin/modinfo" "$tmpdir/bin/lsinitramfs" "$tmpdir/userspace"
 

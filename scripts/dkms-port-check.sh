@@ -128,18 +128,22 @@ if [ -z "$source_version" ] && [ -f "$source_dir/Makefile" ]; then
     ' "$source_dir/Makefile")
 fi
 [ -n "$source_version" ] || die "source version not found in VERSION, version, Cargo.toml, or Makefile"
+source_version=${source_version#v}
 
 module_version=$(modinfo -F version "$module_file" 2>/dev/null || true)
 module_vermagic=$(modinfo -F vermagic "$module_file" 2>/dev/null || true)
 [ -n "$module_version" ] || die "module version unavailable: $module_file"
 [ -n "$module_vermagic" ] || die "module vermagic unavailable: $module_file"
+module_version=${module_version#v}
 module_kernel=${module_vermagic%% *}
 [ "$module_kernel" = "$kernel_release" ] ||
     die "module vermagic kernel mismatch: expected $kernel_release, got $module_kernel"
 
-userspace_output=$("$userspace" --version 2>&1) || die "userspace --version failed: $userspace"
+userspace_output=$("$userspace" --version 2>&1 || "$userspace" version 2>&1) ||
+    die "userspace version command failed: $userspace"
 userspace_version=$(printf '%s\n' "$userspace_output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
 [ -n "$userspace_version" ] || die "userspace version not found: $userspace"
+userspace_version=${userspace_version#v}
 
 [ "$source_version" = "$module_version" ] ||
     die "source/module version mismatch: $source_version != $module_version"

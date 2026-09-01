@@ -10,7 +10,7 @@ initramfs，亦不改動實機磁碟或 GRUB。
 - source tree 版本：讀取 `VERSION`、`version`、`Cargo.toml` 或 `Makefile`。
 - kernel module 版本：由 `modinfo` 讀取 `version`。
 - module `vermagic`：首欄須等於目標 kernel release。
-- userspace 版本：執行指定檔案之 `--version`，須與 source tree 相同。
+- userspace 版本：先執行 `--version`，失敗則執行 `version`，須與 source tree 相同。
 - initramfs：須含同名 `*.ko` 或常見壓縮形式。
 
 版本任一不合即失敗；勿以「可載入」或「已編出」代替相容性證明。
