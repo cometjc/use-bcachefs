@@ -94,6 +94,10 @@ command -v lsinitramfs >/dev/null 2>&1 || {
     printf 'FAIL: required tool not found: lsinitramfs\n' >&2
     exit 2
 }
+command -v unmkinitramfs >/dev/null 2>&1 || {
+    printf 'FAIL: required tool not found: unmkinitramfs\n' >&2
+    exit 2
+}
 
 read_version_file() {
     local file=$1 value
@@ -164,6 +168,28 @@ if ! awk -v module_name="$module_name" '
     ' <<<"$initramfs_listing"; then
     die "module absent from initramfs: $module_name"
 fi
+
+extract_dir=$(mktemp -d "${TMPDIR:-/tmp}/bcachefs-port-check.XXXXXX")
+cleanup() {
+    find "$extract_dir" -mindepth 1 -delete 2>/dev/null || :
+    rmdir "$extract_dir" 2>/dev/null || :
+}
+trap cleanup EXIT HUP INT TERM
+unmkinitramfs "$initramfs" "$extract_dir" >/dev/null 2>&1 ||
+    die "cannot extract initramfs: $initramfs"
+if find "$extract_dir" -path '*/usr/local/lib/bcachefs-tools/*' -print -quit |
+    grep -q .; then
+    die "stale bcachefs-tools closure in initramfs"
+fi
+embedded_userspace=$(find "$extract_dir" -type f -path '*/usr/sbin/bcachefs' -print)
+case "$embedded_userspace" in
+    */usr/sbin/bcachefs) ;;
+    *) die "userspace absent or ambiguous in initramfs: $embedded_userspace" ;;
+esac
+userspace_sha=$(sha256sum "$userspace" | awk '{print $1}')
+embedded_userspace_sha=$(sha256sum "$embedded_userspace" | awk '{print $1}')
+[ "$userspace_sha" = "$embedded_userspace_sha" ] ||
+    die "initramfs userspace hash mismatch: $userspace_sha != $embedded_userspace_sha"
 
 printf 'PASS: source=%s module=%s userspace=%s kernel=%s initramfs=%s\n' \
     "$source_version" "$module_version" "$userspace_version" "$kernel_release" "$module_name"

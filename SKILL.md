@@ -12,6 +12,7 @@ use-bcachefs dkms-port-check --help
 ```
 
 唯讀核對新版 kernel 之 source、module、userspace、vermagic 與 initramfs；
+並確認 initramfs 內 userspace 與輸入 artifact 同 hash、無舊版 closure；
 不編譯、不安裝、不改磁碟或 GRUB。詳見 `references/dkms-porting.md`。
 
 ## 安裝 skill command

@@ -20,6 +20,16 @@ cat >"$tmpdir/bin/lsinitramfs" <<'EOF'
 #!/usr/bin/env bash
 printf 'usr/lib/modules/7.0.0-30-generic/updates/bcachefs.ko\n'
 EOF
+cat >"$tmpdir/bin/unmkinitramfs" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+mkdir -p "$2/main/usr/sbin"
+cp "$EMBEDDED_USERSPACE" "$2/main/usr/sbin/bcachefs"
+if [ "${STALE_CLOSURE:-0}" = 1 ]; then
+    mkdir -p "$2/main/usr/local/lib/bcachefs-tools/v1.37.1"
+    : >"$2/main/usr/local/lib/bcachefs-tools/v1.37.1/bcachefs"
+fi
+EOF
 cat >"$tmpdir/userspace" <<'EOF'
 #!/usr/bin/env bash
 if [ "${1:-}" = "version" ]; then
@@ -28,22 +38,37 @@ if [ "${1:-}" = "version" ]; then
 fi
 exit 2
 EOF
-chmod +x "$tmpdir/bin/modinfo" "$tmpdir/bin/lsinitramfs" "$tmpdir/userspace"
+chmod +x "$tmpdir/bin/modinfo" "$tmpdir/bin/lsinitramfs" \
+    "$tmpdir/bin/unmkinitramfs" "$tmpdir/userspace"
 
-PATH="$tmpdir/bin:$PATH" "$root/scripts/dkms-port-check.sh" \
+EMBEDDED_USERSPACE="$tmpdir/userspace" PATH="$tmpdir/bin:$PATH" \
+    "$root/scripts/dkms-port-check.sh" \
     --source-dir "$tmpdir/source" \
     --kernel-release 7.0.0-30-generic \
     --module "$tmpdir/bcachefs.ko" \
     --userspace "$tmpdir/userspace" \
     --initramfs "$tmpdir/initramfs.img"
 
-if PATH="$tmpdir/bin:$PATH" "$root/scripts/dkms-port-check.sh" \
+printf 'stale-userspace\n' >"$tmpdir/stale-userspace"
+if EMBEDDED_USERSPACE="$tmpdir/stale-userspace" PATH="$tmpdir/bin:$PATH" \
+    "$root/scripts/dkms-port-check.sh" \
     --source-dir "$tmpdir/source" \
     --kernel-release wrong-kernel \
     --module "$tmpdir/bcachefs.ko" \
     --userspace "$tmpdir/userspace" \
     --initramfs "$tmpdir/initramfs.img"; then
     printf 'self-check: mismatch unexpectedly passed\n' >&2
+    exit 1
+fi
+
+if EMBEDDED_USERSPACE="$tmpdir/userspace" STALE_CLOSURE=1 \
+    PATH="$tmpdir/bin:$PATH" "$root/scripts/dkms-port-check.sh" \
+    --source-dir "$tmpdir/source" \
+    --kernel-release 7.0.0-30-generic \
+    --module "$tmpdir/bcachefs.ko" \
+    --userspace "$tmpdir/userspace" \
+    --initramfs "$tmpdir/initramfs.img"; then
+    printf 'self-check: stale closure unexpectedly passed\n' >&2
     exit 1
 fi
 
