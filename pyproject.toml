@@ -16,6 +16,7 @@ use-bcachefs = "scripts.uv_tools_entry:main"
 only-include = [
   "scripts/uv_tools_entry.py",
   "scripts/dkms-port-check.sh",
+  "scripts/grub-canary-check.sh",
 ]
 
 [tool.uv]

@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = (Path(__file__).resolve().parent / '..').resolve()
 COMMAND = 'use-bcachefs'
-SUBCOMMANDS = {'dkms-port-check': 'scripts/dkms-port-check.sh'}
+SUBCOMMANDS = {'dkms-port-check': 'scripts/dkms-port-check.sh', 'grub-canary-check': 'scripts/grub-canary-check.sh'}
 # A helper is run by its own interpreter when it is not directly executable.
 INTERPRETERS = {".py": [sys.executable], ".js": ["node"], ".mjs": ["node"]}
 

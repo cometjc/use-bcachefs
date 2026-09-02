@@ -15,6 +15,16 @@ use-bcachefs dkms-port-check --help
 並確認 initramfs 內 userspace 與輸入 artifact 同 hash、無舊版 closure；
 不編譯、不安裝、不改磁碟或 GRUB。詳見 `references/dkms-porting.md`。
 
+```bash
+use-bcachefs grub-canary-check --help
+```
+
+唯讀核對 `/etc/default/bcachefs-manual-grub` 是否殘留
+`MANUAL_GRUB_CANARY_*`／`MANUAL_GRUB_BOOTSTRAP_*` 設定卻無對應 `/boot` 檔案，
+並核對渲染後 `grub.cfg` 的 `bcachefs-root-default`（永久預設、無 one-shot
+保護）是否被綁定到 `*.bcachefs-module-canary` 或 `*.bcachefs-bootstrap` 這類
+一次性 initrd；不改設定、GRUB 或磁碟。詳見 `references/grub-canary-drift.md`。
+
 ## 安裝 skill command
 
 於 primary worktree 執行：
