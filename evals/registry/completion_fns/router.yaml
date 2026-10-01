@@ -1,0 +1,4 @@
+router/chat:
+  class: boot_layout_eval:RouterChat
+  args:
+    model: eval

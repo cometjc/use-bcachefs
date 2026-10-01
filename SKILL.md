@@ -1,186 +1,49 @@
 ---
 name: use-bcachefs
-description: Reference for bcachefs-specific system configuration pitfalls — plocate/updatedb/locate setup, DKMS port checks, PRUNEFS, PRUNE_BIND_MOUNTS, subvolume mount behaviour, and swapfile limitation (use zram instead).
+description: Use when integrating bcachefs with Linux boot, multi-device root subvolumes, initramfs/GRUB rollback, bubblewrap mount checks, plocate or swap.
 ---
 
-# bcachefs 系統整合注意事項
+# bcachefs 系統整合
 
-## 指令總覽
+提供 bcachefs 特有的相容性與唯讀檢查；不自動安裝 kernel、改 fstab、武裝
+重開或改磁碟。主機寫入與重開須另獲授權。範例須依當地主機調整。
 
-```bash
-use-bcachefs dkms-port-check --help
-```
+## 依問題選入口
 
-唯讀核對新版 kernel 之 source、module、userspace、vermagic 與 initramfs；
-並確認 initramfs 內 userspace 與輸入 artifact 同 hash、無舊版 closure；
-不編譯、不安裝、不改磁碟或 GRUB。詳見 `references/dkms-porting.md`。
+| 問題 | 入口 |
+| --- | --- |
+| 多裝置 root、子卷 bind、Codex/bubblewrap 拒絕 top alias | [最新開機架構與可回退部署](references/boot-layout.md) |
+| 新 kernel/module/userspace/initramfs 是否一致 | `use-bcachefs dkms-port-check --help`；[版本與 provenance](references/dkms-porting.md) |
+| GRUB 預設誤指一次性 canary/bootstrap initrd | `use-bcachefs grub-canary-check --help`；[漂移診斷](references/grub-canary-drift.md) |
+| locate 結果空白 | 下節 plocate |
+| bcachefs swapfile 回 Invalid argument | 下節 swap |
 
-```bash
-use-bcachefs grub-canary-check --help
-```
+目前驗證的架構是 initramfs **先 bind 子卷，再卸 top alias**，非原生
+`subvol=` mount；`bcachefs_subvol` 是自訂 hook 參數。不要僅刪 fstab 的 bind
+列、永久停用 sandbox，或把 `panic=5` 當作所有 Emergency mode 的保證。
 
-唯讀核對 `/etc/default/bcachefs-manual-grub` 是否殘留
-`MANUAL_GRUB_CANARY_*`／`MANUAL_GRUB_BOOTSTRAP_*` 設定卻無對應 `/boot` 檔案，
-並核對渲染後 `grub.cfg` 的 `bcachefs-root-default`（永久預設、無 one-shot
-保護）是否被綁定到 `*.bcachefs-module-canary` 或 `*.bcachefs-bootstrap` 這類
-一次性 initrd；不改設定、GRUB 或磁碟。詳見 `references/grub-canary-drift.md`。
+## plocate / updatedb
 
-## 安裝 skill command
+症狀：已知檔案查無結果，plocate DB 近乎只有 header，更新服務卻 exit 0。
+bcachefs 子卷可能有相同 `st_dev`；無對應支援的 updatedb 會把它們當 bind
+mount，於 `PRUNE_BIND_MOUNTS="yes"` 時跳過。
 
-於 primary worktree 執行：
+先核對 `/etc/updatedb.conf`、DB 大小與 `stat` 的 device ID，再於獲授權後
+改 `PRUNE_BIND_MOUNTS="no"`，執行 `updatedb` 並用已知檔案驗證。
+僅當 top-level 管理掛載存在時，加入相應 `PRUNEPATHS` 避免重複索引；
+alias-free 正常開機不需要恢復 `/mnt/bcachefs-top` 或 `/run/bcachefs-top`。
+Ubuntu 24.04 plocate 1.1.19 的歷史結果不可推定為所有新版本行為。
 
-```bash
-writing-skill-scripts install scripts/uv-tools-expose.json
-use-bcachefs --help
-use-bcachefs dkms-port-check --help
-```
+## swap
 
-## plocate / updatedb / locate 在 bcachefs 上的正確設定
+2026-05 驗證環境中，bcachefs 上的 swapfile 回 `swapon: Invalid argument`；
+不要套用 btrfs 的 `chattr +C`／offset 做法，亦不要斷言未來所有版本均不支援。
+先查目標 kernel 的實際支援；不支援時採 zram 或獨立 swap partition。
+已有 systemd-zram-generator 時用 `/etc/systemd/zram-generator.conf`，不要另建
+重複 service。RAM 大小、壓縮演算法與容量由主機負載決定，不寫死 60G。
 
-### 症狀
+## 安裝與驗證
 
-- `locate <已知檔案>` 查無結果
-- `/var/lib/plocate/plocate.db` 只有 ~969 bytes（空 header）
-- `plocate-updatedb.service` CPU time 只有數十毫秒（正常應數秒至數十秒）
-- `systemctl status plocate-updatedb.service` 顯示 exit 0，無錯誤
-
-### 根因
-
-bcachefs 子卷（`/@root`、`/@home`、`/@docker` 等）均來自同一底層裝置，
-所有子卷的 `st_dev` **相同**。
-
-當 `/etc/updatedb.conf` 設定 `PRUNE_BIND_MOUNTS="yes"` 時，
-plocate 以 same-source-device 邏輯誤判所有 bcachefs 子卷為 bind mount，
-整批跳過，導致 DB 幾乎為空。
-
-### 診斷指令
-
-```bash
-# 確認 st_dev 是否一致（bcachefs 子卷預期相同）
-python3 -c "
-import os
-for p in ['/', '/home', '/boot']:
-    s = os.stat(p)
-    print(f'{p}: st_dev=0x{s.st_dev:X}')
-"
-
-# 確認設定
-grep PRUNE_BIND_MOUNTS /etc/updatedb.conf
-
-# 確認 DB 大小（正常應 > 10MB）
-ls -lh /var/lib/plocate/plocate.db
-```
-
-### 修復
-
-```bash
-# 1. 關閉 bind mount pruning
-sudo sed -i 's/^PRUNE_BIND_MOUNTS="yes"/PRUNE_BIND_MOUNTS="no"/' /etc/updatedb.conf
-
-# 2. 若有掛載 bcachefs 頂層（/mnt/bcachefs-top 等），加入 PRUNEPATHS 避免重複路徑
-#    （修改 /etc/updatedb.conf 的 PRUNEPATHS 行，手動加入路徑）
-
-# 3. 重建索引並驗證
-sudo updatedb
-locate /etc/passwd   # 應有多筆輸出
-```
-
-### PRUNEPATHS 建議
-
-若系統有 `/mnt/bcachefs-top`、`/run/bcachefs-top` 等直接掛載 bcachefs 頂層的路徑，
-`locate` 會出現重複結果（例如 `/home/foo` 與 `/mnt/bcachefs-top/@home/foo`）。
-建議加入 `PRUNEPATHS`：
-
-```
-PRUNEPATHS="/tmp /var/spool /media ... /mnt/bcachefs-top /run/bcachefs-top"
-```
-
-### Ubuntu 套件狀態
-
-- `plocate 1.1.19-2ubuntu2`（Ubuntu 24.04）：編譯時未帶入 bcachefs ioctl 支援
-  （`strings /usr/sbin/updatedb.plocate | grep -i bcachefs` 無輸出）
-- 無 bcachefs ioctl 支援時，plocate 應降回 opendir/readdir traversal
-- `PRUNE_BIND_MOUNTS="no"` 後，traversal 可正常運作
-- `mlocate` 在 Ubuntu 22.04+ 已從套件庫移除
-
-### 參考 ops 記錄
-
-`ops/resolved/2026-05-13-updatedb-bcachefs-locate-empty.md`
-
----
-
-## bcachefs 不支援 swapfile（swapon Invalid argument）
-
-### 症狀
-
-```
-swapon /swapfile
-swapon: /swapfile: swapon failed: Invalid argument
-```
-
-`dmesg` 無更多說明；`/swapfile` 已建立且大小正確。
-
-### 根因
-
-bcachefs 截至 2026-05 不支援以 `swapon` 啟用放置在其上的 swapfile。
-核心拒絕操作並回 `EINVAL`；此限制與 btrfs 需要 `chattr +C` 不同，
-即使設定正確的 offset/uuid 仍無效。
-
-### 解法：zram swap
-
-不依賴磁碟路徑，直接在記憶體裡建立壓縮 swap 裝置：
-
-```bash
-# 建立 60G zram swap（可依記憶體大小調整）
-sudo modprobe zram
-echo zstd | sudo tee /sys/block/zram0/comp_algorithm
-echo 60G  | sudo tee /sys/block/zram0/disksize
-sudo mkswap /dev/zram0
-sudo swapon -p 100 /dev/zram0
-
-# 驗證
-swapon --show
-# 預期: /dev/zram0  60G  prio 100
-```
-
-**持久化**（開機自動啟用）：
-
-```bash
-# /usr/local/sbin/example-zram-swap
-#!/bin/bash
-set -e
-modprobe zram
-echo zstd > /sys/block/zram0/comp_algorithm
-echo 60G  > /sys/block/zram0/disksize
-mkswap /dev/zram0
-swapon -p 100 /dev/zram0
-```
-
-```ini
-# /etc/systemd/system/example-zram-swap.service
-[Unit]
-Description=zram swap (bcachefs workaround)
-After=local-fs.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/example-zram-swap
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable --now example-zram-swap.service
-```
-
-### 規則
-
-- bcachefs 上放 swapfile 永遠失敗，不必排查 offset 或 uuid；直接改 zram。
-- zram 預設壓縮為 `lzo-rle`；`zstd` 效率更佳，可設定後再 mkswap。
-- 若系統有 `systemd-zram-generator`（Ubuntu 24.04 預設安裝），可改用 `/etc/systemd/zram-generator.conf` 統一管理；手工 service 可視情況移除。
-
-### 參考 ops 記錄
-
-`ops/archive/plan-2026-05-boot-repair-iso-rebuild/README.md`（2026-05-16 執行紀錄 §本機 swap 補救）
+安裝方式見 [README.md](README.md)。兩個公開命令皆唯讀；不帶參數時以
+各自 `--help` 查契約。變更後跑 `tests/` 的 fixture selfchecks；不得讓測試
+格式化真實裝置或寫入 `/proc`、`/sys`、`/dev`。

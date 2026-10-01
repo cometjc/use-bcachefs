@@ -1,0 +1,8 @@
+bcachefs-boot-layout:
+  id: bcachefs-boot-layout.dev.v0
+  description: Retrieval and application of the portable alias-free boot contract.
+  metrics: [accuracy]
+bcachefs-boot-layout.dev.v0:
+  class: boot_layout_eval:BootLayoutMatch
+  args:
+    samples_jsonl: boot-layout/samples.jsonl
